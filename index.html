@@ -121,9 +121,7 @@
     const resumeBtn = document.getElementById('resume-btn');
 
     function getTargets() {
-      return targetInput.value.split(/
-?
-/).map(s => s.trim()).filter(Boolean);
+      return targetInput.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     }
     function updateCount() {
       countLabel.textContent = `${getTargets().length} รายการ`;
@@ -132,8 +130,7 @@
       resultBox.className = isMatch ? 'match' : 'no-match';
       document.getElementById('result-title').textContent =
         isMatch ? '✓ พบ SN ในรายการเป้าหมาย' : '✕ ไม่พบ SN ในรายการเป้าหมาย';
-      document.getElementById('result-value').textContent = `ข้อมูลที่สแกนได้:
-${decodedText}`;
+      document.getElementById('result-value').textContent = `ข้อมูลที่สแกนได้:\n${decodedText}`;
       resumeBtn.style.display = isMatch ? 'block' : 'none';
     }
     function onScanSuccess(decodedText) {
@@ -179,13 +176,7 @@ ${decodedText}`;
         { 
           fps: 10, 
           qrbox: { width: 220, height: 220 }, 
-          rememberLastUsedCamera: true,
-          videoConstraints: {
-            facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: "continuous" }]
-          }
+          rememberLastUsedCamera: true
         }, 
         false
       );
