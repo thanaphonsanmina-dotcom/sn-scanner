@@ -4,11 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f7fb">
-  <meta name="description" content="เครื่องมือสแกนบาร์โค้ดเพื่อตรวจสอบ Serial Number">
-  <title>SN Scanner</title>
+  <title>SN Scanner (All-in-One + Zoom)</title>
+  
+  <!-- โหลดไลบรารีสแกนบาร์โค้ด -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- โหลดไลบรารี Tesseract.js สำหรับ OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -21,168 +23,356 @@
     * { box-sizing: border-box; }
     body {
       margin: 0; padding: max(16px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
-      background: var(--bg); color: var(--ink);
-      font-family: "Sarabun", system-ui, sans-serif;
+      background: var(--bg); color: var(--ink); font-family: "Sarabun", system-ui, sans-serif;
     }
     .wrap { width: 100%; max-width: 620px; margin: 0 auto; }
     header { padding: 14px 4px 18px; }
     .eyebrow { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .12em; }
-    h1 { margin: 4px 0 3px; font-size: clamp(25px, 7vw, 32px); line-height: 1.2; }
+    h1 { margin: 4px 0 3px; font-size: clamp(23px, 6vw, 28px); line-height: 1.2; }
     .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
-    .card {
-      background: var(--card); border: 1px solid var(--line); border-radius: 20px;
-      padding: 17px; margin-bottom: 14px; box-shadow: var(--shadow);
-    }
-    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-    h2 { margin: 0; font-size: 17px; }
-    .count { color: var(--blue); background: var(--blue-soft); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 17px; margin-bottom: 14px; box-shadow: var(--shadow); }
+    h2 { margin: 0 0 10px 0; font-size: 17px; }
     .hint { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    
+    /* ส่วนของ Textarea */
     textarea {
-      display: block; width: 100%; min-height: 118px; resize: vertical; padding: 13px 14px;
+      display: block; width: 100%; min-height: 90px; resize: vertical; padding: 13px 14px;
       border: 1px solid var(--line); border-radius: 13px; background: #fbfcff;
-      color: var(--ink); font: inherit; font-size: 15px; line-height: 1.55; outline: none;
+      color: var(--ink); font: inherit; font-size: 15px; outline: none;
     }
     textarea:focus { border-color: #8bb2ff; box-shadow: 0 0 0 3px #2563eb18; }
+    
+    /* ปุ่มจัดการรายชื่อ */
     .actions { display: flex; gap: 9px; margin-top: 11px; }
-    button {
-      min-height: 46px; border: 0; border-radius: 12px; padding: 10px 16px;
-      font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+    .btn {
+      flex: 1; min-height: 44px; border: 0; border-radius: 12px; padding: 10px 16px;
+      font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
     }
-    button:focus-visible { outline: 3px solid #93b4ff; outline-offset: 2px; }
-    .primary { background: var(--blue); color: white; flex: 1; }
-    .secondary { background: #f0f3f8; color: #46536a; }
-    .camera-card { padding: 14px; }
-    .camera-title { padding: 2px 3px 12px; }
-    #reader { width: 100%; overflow: hidden; border-radius: 14px; background: #f7f9fc; }
+    .btn-primary { background: var(--blue); color: white; }
+    .btn-secondary { background: #f0f3f8; color: #46536a; }
+
+    /* ระบบแท็บ (Tabs) */
+    .tabs { display: flex; background: #e3e9f2; border-radius: 14px; padding: 4px; margin-bottom: 15px; }
+    .tab-btn {
+      flex: 1; text-align: center; padding: 10px; border-radius: 10px; border: none;
+      background: transparent; color: var(--muted); font-weight: 700; font-size: 15px;
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
+    }
+    .tab-btn.active { background: white; color: var(--blue); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    
+    .view-section { display: none; }
+    .view-section.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* UI สแกนบาร์โค้ด */
+    #reader { width: 100%; overflow: hidden; border-radius: 14px; background: #f7f9fc; position: relative;}
     #reader video { border-radius: 12px; object-fit: cover; }
+    
+    /* ซ่อนปุ่มต่างๆ ของ html5-qrcode ที่เราไม่ต้องการ */
     #reader__dashboard_section_csr button, #reader button {
       min-height: 40px; border-radius: 10px; background: var(--blue); color: white;
-      border: 0; padding: 8px 12px; font-family: inherit; font-weight: 700;
+      border: 0; padding: 8px 12px; font-family: inherit; font-weight: 700; cursor: pointer;
     }
-    #reader select { max-width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--line); font: inherit; }
-    #reader a { color: var(--blue); }
+    
+    /* ตัวเลื่อน Zoom */
+    .zoom-container {
+        display: none; /* ซ่อนไว้ก่อน จะโชว์เมื่อกล้องพร้อม */
+        margin-top: 15px;
+        padding: 15px;
+        background: #f0f3f8;
+        border-radius: 12px;
+        align-items: center;
+        gap: 10px;
+    }
+    .zoom-container label {
+        font-weight: 600;
+        color: var(--ink);
+        font-size: 14px;
+        white-space: nowrap;
+    }
+    input[type=range] {
+        flex: 1;
+        accent-color: var(--blue);
+    }
+    #zoom-value {
+        font-weight: bold;
+        color: var(--blue);
+        min-width: 35px;
+        text-align: right;
+    }
+
+    /* UI OCR */
+    .camera-btn-ocr { 
+      display: flex; align-items: center; justify-content: center; width: 100%; 
+      min-height: 60px; background: var(--blue); color: white; border-radius: 14px; 
+      font-size: 16px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2);
+    }
+    #loading-ocr { display: none; text-align: center; color: var(--blue); margin-top: 15px; font-weight: bold; font-size: 15px; padding: 15px; background: #edf4ff; border-radius: 10px;}
+
+    /* กล่องผลลัพธ์ */
     #result-box { display: none; padding: 16px; border-radius: 16px; margin: 14px 0; overflow-wrap: anywhere; }
     #result-box.match { display: block; color: var(--green); background: var(--green-bg); border: 1px solid #b9ead5; }
     #result-box.no-match { display: block; color: var(--red); background: var(--red-bg); border: 1px solid #ffd0cc; }
     .result-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
-    .result-value { color: var(--ink); background: rgba(255,255,255,.75); border-radius: 10px; padding: 11px; font-size: 14px; white-space: pre-wrap; }
-    #resume-btn { width: 100%; margin-top: 10px; display: none; background: #0b8a62; color: #fff; }
-    .footnote { text-align: center; color: #8a95a8; font-size: 12px; padding: 5px 10px 0; }
-    @media (max-width: 380px) {
-      body { padding-left: 10px; padding-right: 10px; }
-      .card { padding: 14px; border-radius: 17px; }
-      .actions button { padding-left: 11px; padding-right: 11px; }
-    }
+    .result-value { color: var(--ink); background: rgba(255,255,255,.8); border-radius: 10px; padding: 11px; font-size: 14px; white-space: pre-wrap; font-family: monospace; }
+    #resume-btn { width: 100%; margin-top: 10px; display: none; background: #0b8a62; color: #fff; min-height: 48px; border: none; border-radius: 12px; font-weight: bold; font-size: 15px; cursor: pointer;}
   </style>
 </head>
 <body>
   <main class="wrap">
     <header>
-      <div class="eyebrow">SERIAL NUMBER CHECK</div>
-      <h1>ค้นหาจากรายชื่อ SN</h1>
-      <p class="subtitle">วางรายการ SN แล้วใช้กล้องสแกนเพื่อตรวจสอบ</p>
+      <div class="eyebrow">ALL-IN-ONE SN CHECKER</div>
+      <h1>เครื่องมือค้นหา Serial Number</h1>
+      <p class="subtitle">รวมระบบสแกนบาร์โค้ด และ ดึงข้อความจากภาพ (OCR)</p>
     </header>
 
+    <!-- ส่วนที่ 1: รายชื่อเป้าหมาย -->
     <section class="card">
-      <div class="section-head">
-        <h2>1. รายชื่อ SN เป้าหมาย</h2>
-        <span class="count" id="target-count">0 รายการ</span>
-      </div>
-      <p class="hint">ใส่หมายเลขได้หลายรายการ โดยแยกบรรทัดละ 1 หมายเลข</p>
-      <textarea id="target-sns" autocomplete="off" autocapitalize="off" spellcheck="false"
-        placeholder="ตัวอย่าง&#10;SN123456789&#10;SN987654321"></textarea>
+      <h2>1. รายชื่อ SN เป้าหมาย</h2>
+      <p class="hint">ใส่บรรทัดละ 1 หมายเลข (บันทึกอัตโนมัติเมื่อกด)</p>
+      <textarea id="target-sns" placeholder="ตัวอย่าง&#10;Q00K42G3&#10;M6402664349"></textarea>
       <div class="actions">
-        <button class="primary" id="save-btn" type="button">บันทึกรายชื่อ</button>
-        <button class="secondary" id="clear-btn" type="button">ล้างรายการ</button>
+        <button class="btn btn-primary" id="save-btn">บันทึกรายชื่อ</button>
+        <button class="btn btn-secondary" id="clear-btn">ล้าง</button>
       </div>
     </section>
 
-    <section class="card camera-card">
-      <div class="camera-title">
-        <h2>2. สแกนบาร์โค้ด / QR Code</h2>
-        <p class="hint" style="margin:4px 0 0">อนุญาตให้เว็บไซต์เข้าถึงกล้องเมื่อมีข้อความแจ้งเตือน</p>
+    <!-- ส่วนที่ 2: ระบบสแกน (มีแท็บ) -->
+    <section class="card">
+      <div class="tabs">
+        <button class="tab-btn active" id="tab-barcode" onclick="switchTab('barcode')">สแกนบาร์โค้ด</button>
+        <button class="tab-btn" id="tab-ocr" onclick="switchTab('ocr')">ถ่ายรูป (OCR)</button>
       </div>
-      <div id="reader"></div>
+
+      <!-- โหมดบาร์โค้ด -->
+      <div id="view-barcode" class="view-section active">
+        <p class="hint">ใช้กล้องส่องบาร์โค้ดสี่เหลี่ยม (Data Matrix) ระบบจะอ่านและเทียบให้อัตโนมัติ</p>
+        
+        <!-- ตัวเลือกกล้องและกรอบสแกน -->
+        <div id="reader"></div>
+
+        <!-- แถบเลื่อน Zoom (จะแสดงเฉพาะมือถือที่รองรับ) -->
+        <div class="zoom-container" id="zoom-container">
+            <label for="zoom-slider">🔍 ซูมกล้อง:</label>
+            <input type="range" id="zoom-slider" min="1" max="3" step="0.1" value="1">
+            <span id="zoom-value">1.0x</span>
+        </div>
+      </div>
+
+      <!-- โหมด OCR -->
+      <div id="view-ocr" class="view-section">
+        <p class="hint">ถ่ายรูปสติ๊กเกอร์ SN ให้ชัดเจนที่สุด เพื่อให้ AI ดึงตัวหนังสือออกมาเทียบ</p>
+        <label for="camera-input" class="camera-btn-ocr">📸 เปิดกล้องถ่ายรูป / เลือกรูป</label>
+        <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none;">
+        <div id="loading-ocr">⏳ กำลังอ่านตัวหนังสือจากรูป... <br><span style="font-size: 13px; font-weight: normal;">(อาจใช้เวลา 2-5 วินาที)</span></div>
+      </div>
     </section>
 
-    <section id="result-box" aria-live="polite">
+    <!-- ส่วนแสดงผลลัพธ์ (ใช้ร่วมกัน) -->
+    <section id="result-box">
       <div class="result-title" id="result-title"></div>
       <div class="result-value" id="result-value"></div>
+      <button id="resume-btn" onclick="resetScanner()">สแกนตัวต่อไป</button>
     </section>
-    <button id="resume-btn" type="button">สแกนตัวต่อไป</button>
-    <p class="footnote">ต้องเปิดผ่าน HTTPS และอนุญาตการใช้กล้องบนโทรศัพท์</p>
   </main>
 
   <script>
+    // ----- ตัวแปรระบบ -----
     let html5QrcodeScanner;
+    let currentMode = 'barcode'; 
+    let cameraTrack = null; // เก็บข้อมูลเลนส์กล้องสำหรับทำ Zoom
+    
     const targetInput = document.getElementById('target-sns');
-    const countLabel = document.getElementById('target-count');
     const resultBox = document.getElementById('result-box');
+    const resultTitle = document.getElementById('result-title');
+    const resultValue = document.getElementById('result-value');
     const resumeBtn = document.getElementById('resume-btn');
+    const loadingOcr = document.getElementById('loading-ocr');
+    const zoomContainer = document.getElementById('zoom-container');
+    const zoomSlider = document.getElementById('zoom-slider');
+    const zoomValueDisplay = document.getElementById('zoom-value');
 
-    function getTargets() {
-      return targetInput.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    }
-    function updateCount() {
-      countLabel.textContent = `${getTargets().length} รายการ`;
-    }
-    function showResult(isMatch, decodedText) {
-      resultBox.className = isMatch ? 'match' : 'no-match';
-      document.getElementById('result-title').textContent =
-        isMatch ? '✓ พบ SN ในรายการเป้าหมาย' : '✕ ไม่พบ SN ในรายการเป้าหมาย';
-      document.getElementById('result-value').textContent = `ข้อมูลที่สแกนได้:\n${decodedText}`;
-      resumeBtn.style.display = isMatch ? 'block' : 'none';
-    }
-    function onScanSuccess(decodedText) {
-      const targets = getTargets();
-      const isMatch = targets.some(target => decodedText.includes(target));
-      showResult(isMatch, decodedText);
-      if (isMatch) {
-        try { html5QrcodeScanner.pause(true); } catch (e) {}
-        if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
-      }
-    }
-    function onScanError() { /* ซ่อนข้อความระหว่างกล้องกำลังค้นหาโค้ด */ }
+    // ----- การจัดการรายชื่อ (Local Storage) -----
+    try { targetInput.value = localStorage.getItem('sn-target-list-all') || ''; } catch(e){}
 
-    targetInput.addEventListener('input', updateCount);
     document.getElementById('save-btn').addEventListener('click', () => {
-      try { localStorage.setItem('sn-target-list', targetInput.value); } catch (e) {}
-      updateCount();
+      try { localStorage.setItem('sn-target-list-all', targetInput.value); } catch(e){}
       const btn = document.getElementById('save-btn');
       btn.textContent = 'บันทึกแล้ว ✓';
-      setTimeout(() => btn.textContent = 'บันทึกรายชื่อ', 1400);
+      setTimeout(() => btn.textContent = 'บันทึกรายชื่อ', 1500);
     });
+
     document.getElementById('clear-btn').addEventListener('click', () => {
       targetInput.value = '';
-      try { localStorage.removeItem('sn-target-list'); } catch (e) {}
-      updateCount();
-      targetInput.focus();
+      try { localStorage.removeItem('sn-target-list-all'); } catch(e){}
     });
-    resumeBtn.addEventListener('click', () => {
-      resultBox.className = '';
+
+    // ----- ฟังก์ชันเช็คผลลัพธ์ (ใช้ร่วมกัน) -----
+    function processResult(extractedText, source) {
+      const targets = targetInput.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      let isMatch = false;
+      
+      for (let target of targets) {
+        if (extractedText.includes(target)) {
+          isMatch = true;
+          break;
+        }
+      }
+
+      if (source === 'barcode' && isMatch) {
+        try { html5QrcodeScanner.pause(true); } catch (e) {}
+      }
+
+      resultBox.className = isMatch ? 'match' : 'no-match';
+      resultTitle.textContent = isMatch ? '✅ เจอเป้าหมายแล้ว!' : '❌ ยังไม่ใช่เป้าหมาย';
+      
+      let sourceLabel = source === 'barcode' ? 'ข้อมูลจากบาร์โค้ด' : 'ข้อความจากรูปภาพ';
+      resultValue.textContent = `${sourceLabel}:\n${extractedText}`;
+      
+      resultBox.style.display = 'block';
+      resumeBtn.style.display = isMatch ? 'block' : 'none';
+
+      if (isMatch && navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+
+    function resetScanner() {
       resultBox.style.display = 'none';
       resumeBtn.style.display = 'none';
-      try { html5QrcodeScanner.resume(); } catch (e) {}
+      if (currentMode === 'barcode') {
+        try { html5QrcodeScanner.resume(); } catch (e) {}
+      }
+    }
+
+    // ----- ระบบ Zoom กล้อง -----
+    function setupCameraZoom() {
+        // ค้นหาแท็ก video ที่ html5-qrcode สร้างขึ้น
+        const videoElement = document.querySelector('#reader video');
+        if (!videoElement) return;
+
+        // ดึงข้อมูล Stream ของกล้อง
+        const stream = videoElement.srcObject;
+        if (!stream) return;
+
+        // ดึง Track วิดีโอหลัก
+        cameraTrack = stream.getVideoTracks()[0];
+        if (!cameraTrack) return;
+
+        // ตรวจสอบว่ากล้องเครื่องนี้รองรับการ Zoom หรือไม่
+        const capabilities = cameraTrack.getCapabilities();
+        if (capabilities.zoom) {
+            // ตั้งค่าแถบเลื่อนตามสเปคของกล้องมือถือเครื่องนั้น
+            zoomSlider.min = capabilities.zoom.min;
+            zoomSlider.max = capabilities.zoom.max;
+            zoomSlider.step = capabilities.zoom.step;
+            
+            // ตั้งค่าซูมเริ่มต้นที่ 2.0x (ถ้ามือถือรองรับถึง) 
+            // เพื่อให้ส่องบาร์โค้ดเล็กๆ ได้ง่ายขึ้นทันทีที่เปิด
+            let defaultZoom = 2.0;
+            if (defaultZoom > capabilities.zoom.max) defaultZoom = capabilities.zoom.max;
+            if (defaultZoom < capabilities.zoom.min) defaultZoom = capabilities.zoom.min;
+            
+            zoomSlider.value = defaultZoom;
+            zoomValueDisplay.textContent = defaultZoom.toFixed(1) + 'x';
+            
+            // สั่งกล้องซูม
+            cameraTrack.applyConstraints({
+                advanced: [{ zoom: defaultZoom }]
+            });
+
+            // แสดงแถบเลื่อนบนหน้าจอ
+            zoomContainer.style.display = 'flex';
+        } else {
+            // ถ้ารองรับซูมไม่ได้ ให้ซ่อนแถบเลื่อนไว้
+            zoomContainer.style.display = 'none';
+        }
+    }
+
+    // เมื่อผู้ใช้เลื่อนแถบ Zoom
+    zoomSlider.addEventListener('input', (event) => {
+        const zoomLevel = parseFloat(event.target.value);
+        zoomValueDisplay.textContent = zoomLevel.toFixed(1) + 'x';
+        
+        if (cameraTrack) {
+            cameraTrack.applyConstraints({
+                advanced: [{ zoom: zoomLevel }]
+            }).catch(err => console.log('Zoom error:', err));
+        }
     });
 
-    try {
-      targetInput.value = localStorage.getItem('sn-target-list') || '';
-    } catch (e) {}
-    updateCount();
 
-    if (window.Html5QrcodeScanner) {
+    // ----- ระบบ Barcode (html5-qrcode) -----
+    function initBarcodeScanner() {
+      if (!window.Html5QrcodeScanner) return;
       html5QrcodeScanner = new Html5QrcodeScanner(
         'reader', 
         { 
-          fps: 10, 
-          qrbox: { width: 220, height: 220 }, 
-          rememberLastUsedCamera: true
+            fps: 10, 
+            qrbox: { width: 220, height: 220 }, 
+            rememberLastUsedCamera: true
         }, 
         false
       );
-      html5QrcodeScanner.render(onScanSuccess, onScanError);
-    } else {
-      document.getElementById('reader').textContent = 'โหลดระบบสแกนไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า';
+      
+      html5QrcodeScanner.render(
+        (decodedText) => processResult(decodedText, 'barcode'), 
+        (error) => { /* ซ่อน error */ }
+      );
+
+      // ใช้ MutationObserver เพื่อตรวจจับว่ากล้องถูกเปิดขึ้นมาเสร็จหรือยัง
+      // เมื่อวิดีโอเริ่มเล่น ค่อยเรียกฟังก์ชัน setupCameraZoom
+      const observer = new MutationObserver((mutations) => {
+        if (document.querySelector('#reader video')) {
+            setTimeout(setupCameraZoom, 1000); // หน่วงเวลา 1 วิ ให้กล้องรันเต็มที่
+            observer.disconnect(); // หยุดสังเกตการณ์
+        }
+      });
+      observer.observe(document.getElementById('reader'), { childList: true, subtree: true });
+    }
+    
+    window.addEventListener('load', () => {
+      initBarcodeScanner();
+    });
+
+    // ----- ระบบ OCR (Tesseract.js) -----
+    document.getElementById('camera-input').addEventListener('change', async (e) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const file = e.target.files[0];
+
+      resultBox.style.display = 'none';
+      loadingOcr.style.display = 'block';
+
+      try {
+        const worker = await Tesseract.createWorker('eng');
+        const ret = await worker.recognize(file);
+        await worker.terminate();
+        processResult(ret.data.text, 'ocr');
+      } catch (error) {
+        alert('เกิดข้อผิดพลาดในการดึงข้อความ');
+        console.error(error);
+      } finally {
+        loadingOcr.style.display = 'none';
+        e.target.value = ''; 
+      }
+    });
+
+    // ----- ระบบสลับแท็บ -----
+    function switchTab(mode) {
+      currentMode = mode;
+      document.getElementById('result-box').style.display = 'none'; 
+
+      if (mode === 'barcode') {
+        document.getElementById('tab-barcode').classList.add('active');
+        document.getElementById('tab-ocr').classList.remove('active');
+        document.getElementById('view-barcode').classList.add('active');
+        document.getElementById('view-ocr').classList.remove('active');
+        try { html5QrcodeScanner.resume(); } catch(e){} 
+      } else {
+        document.getElementById('tab-ocr').classList.add('active');
+        document.getElementById('tab-barcode').classList.remove('active');
+        document.getElementById('view-ocr').classList.add('active');
+        document.getElementById('view-barcode').classList.remove('active');
+        try { html5QrcodeScanner.pause(true); } catch(e){} 
+      }
     }
   </script>
 </body>
