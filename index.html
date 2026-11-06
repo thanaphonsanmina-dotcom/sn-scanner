@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f7fb">
+  <meta name="description" content="เครื่องมือสแกนบาร์โค้ดเพื่อตรวจสอบ Serial Number">
+  <title>SN Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6fb; --card: #fff; --ink: #182338; --muted: #6b7890;
+      --line: #e3e9f2; --blue: #2563eb; --blue-soft: #edf4ff;
+      --green: #087f5b; --green-bg: #e8f8f1; --red: #c73535; --red-bg: #fff0ef;
+      --shadow: 0 8px 28px rgba(31, 53, 87, .07);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: max(16px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
+      background: var(--bg); color: var(--ink);
+      font-family: "Sarabun", system-ui, sans-serif;
+    }
+    .wrap { width: 100%; max-width: 620px; margin: 0 auto; }
+    header { padding: 14px 4px 18px; }
+    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+    h1 { margin: 4px 0 3px; font-size: clamp(25px, 7vw, 32px); line-height: 1.2; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+      padding: 17px; margin-bottom: 14px; box-shadow: var(--shadow);
+    }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    h2 { margin: 0; font-size: 17px; }
+    .count { color: var(--blue); background: var(--blue-soft); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .hint { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    textarea {
+      display: block; width: 100%; min-height: 118px; resize: vertical; padding: 13px 14px;
+      border: 1px solid var(--line); border-radius: 13px; background: #fbfcff;
+      color: var(--ink); font: inherit; font-size: 15px; line-height: 1.55; outline: none;
+    }
+    textarea:focus { border-color: #8bb2ff; box-shadow: 0 0 0 3px #2563eb18; }
+    .actions { display: flex; gap: 9px; margin-top: 11px; }
+    button {
+      min-height: 46px; border: 0; border-radius: 12px; padding: 10px 16px;
+      font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+    }
+    button:focus-visible { outline: 3px solid #93b4ff; outline-offset: 2px; }
+    .primary { background: var(--blue); color: white; flex: 1; }
+    .secondary { background: #f0f3f8; color: #46536a; }
+    .camera-card { padding: 14px; }
+    .camera-title { padding: 2px 3px 12px; }
+    #reader { width: 100%; overflow: hidden; border-radius: 14px; background: #f7f9fc; }
+    #reader video { border-radius: 12px; object-fit: cover; }
+    #reader__dashboard_section_csr button, #reader button {
+      min-height: 40px; border-radius: 10px; background: var(--blue); color: white;
+      border: 0; padding: 8px 12px; font-family: inherit; font-weight: 700;
+    }
+    #reader select { max-width: 100%; padding: 9px; border-radius: 9px; border: 1px solid var(--line); font: inherit; }
+    #reader a { color: var(--blue); }
+    #result-box { display: none; padding: 16px; border-radius: 16px; margin: 14px 0; overflow-wrap: anywhere; }
+    #result-box.match { display: block; color: var(--green); background: var(--green-bg); border: 1px solid #b9ead5; }
+    #result-box.no-match { display: block; color: var(--red); background: var(--red-bg); border: 1px solid #ffd0cc; }
+    .result-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
+    .result-value { color: var(--ink); background: rgba(255,255,255,.75); border-radius: 10px; padding: 11px; font-size: 14px; white-space: pre-wrap; }
+    #resume-btn { width: 100%; margin-top: 10px; display: none; background: #0b8a62; color: #fff; }
+    .footnote { text-align: center; color: #8a95a8; font-size: 12px; padding: 5px 10px 0; }
+    @media (max-width: 380px) {
+      body { padding-left: 10px; padding-right: 10px; }
+      .card { padding: 14px; border-radius: 17px; }
+      .actions button { padding-left: 11px; padding-right: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="eyebrow">SERIAL NUMBER CHECK</div>
+      <h1>ค้นหาจากรายชื่อ SN</h1>
+      <p class="subtitle">วางรายการ SN แล้วใช้กล้องสแกนเพื่อตรวจสอบ</p>
+    </header>
+
+    <section class="card">
+      <div class="section-head">
+        <h2>1. รายชื่อ SN เป้าหมาย</h2>
+        <span class="count" id="target-count">0 รายการ</span>
+      </div>
+      <p class="hint">ใส่หมายเลขได้หลายรายการ โดยแยกบรรทัดละ 1 หมายเลข</p>
+      <textarea id="target-sns" autocomplete="off" autocapitalize="off" spellcheck="false"
+        placeholder="ตัวอย่าง&#10;SN123456789&#10;SN987654321"></textarea>
+      <div class="actions">
+        <button class="primary" id="save-btn" type="button">บันทึกรายชื่อ</button>
+        <button class="secondary" id="clear-btn" type="button">ล้างรายการ</button>
+      </div>
+    </section>
+
+    <section class="card camera-card">
+      <div class="camera-title">
+        <h2>2. สแกนบาร์โค้ด / QR Code</h2>
+        <p class="hint" style="margin:4px 0 0">อนุญาตให้เว็บไซต์เข้าถึงกล้องเมื่อมีข้อความแจ้งเตือน</p>
+      </div>
+      <div id="reader"></div>
+    </section>
+
+    <section id="result-box" aria-live="polite">
+      <div class="result-title" id="result-title"></div>
+      <div class="result-value" id="result-value"></div>
+    </section>
+    <button id="resume-btn" type="button">สแกนตัวต่อไป</button>
+    <p class="footnote">ต้องเปิดผ่าน HTTPS และอนุญาตการใช้กล้องบนโทรศัพท์</p>
+  </main>
+
+  <script>
+    let html5QrcodeScanner;
+    const targetInput = document.getElementById('target-sns');
+    const countLabel = document.getElementById('target-count');
+    const resultBox = document.getElementById('result-box');
+    const resumeBtn = document.getElementById('resume-btn');
+
+    function getTargets() {
+      return targetInput.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+    function updateCount() {
+      countLabel.textContent = `${getTargets().length} รายการ`;
+    }
+    function showResult(isMatch, decodedText) {
+      resultBox.className = isMatch ? 'match' : 'no-match';
+      document.getElementById('result-title').textContent =
+        isMatch ? '✓ พบ SN ในรายการเป้าหมาย' : '✕ ไม่พบ SN ในรายการเป้าหมาย';
+      // ใช้ textContent เพื่อแสดงค่าที่สแกนอย่างปลอดภัย
+      document.getElementById('result-value').textContent = `ข้อมูลที่สแกนได้:\n${decodedText}`;
+      resumeBtn.style.display = isMatch ? 'block' : 'none';
+    }
+    function onScanSuccess(decodedText) {
+      const targets = getTargets();
+      const isMatch = targets.some(target => decodedText.includes(target));
+      showResult(isMatch, decodedText);
+      if (isMatch) {
+        try { html5QrcodeScanner.pause(true); } catch (e) {}
+        if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+      }
+    }
+    function onScanError() { /* ซ่อนข้อความระหว่างกล้องกำลังค้นหาโค้ด */ }
+
+    targetInput.addEventListener('input', updateCount);
+    document.getElementById('save-btn').addEventListener('click', () => {
+      try { localStorage.setItem('sn-target-list', targetInput.value); } catch (e) {}
+      updateCount();
+      const btn = document.getElementById('save-btn');
+      btn.textContent = 'บันทึกแล้ว ✓';
+      setTimeout(() => btn.textContent = 'บันทึกรายชื่อ', 1400);
+    });
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      targetInput.value = '';
+      try { localStorage.removeItem('sn-target-list'); } catch (e) {}
+      updateCount();
+      targetInput.focus();
+    });
+    resumeBtn.addEventListener('click', () => {
+      resultBox.className = '';
+      resultBox.style.display = 'none';
+      resumeBtn.style.display = 'none';
+      try { html5QrcodeScanner.resume(); } catch (e) {}
+    });
+
+    try {
+      targetInput.value = localStorage.getItem('sn-target-list') || '';
+    } catch (e) {}
+    updateCount();
+
+    if (window.Html5QrcodeScanner) {
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        'reader', { fps: 10, qrbox: { width: 230, height: 150 }, rememberLastUsedCamera: true }, false
+      );
+      html5QrcodeScanner.render(onScanSuccess, onScanError);
+    } else {
+      document.getElementById('reader').textContent = 'โหลดระบบสแกนไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้า';
+    }
+  </script>
+</body>
+</html>
