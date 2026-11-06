@@ -56,10 +56,9 @@
     .view-section.active { display: block; animation: fadeIn 0.3s; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-    /* Camera UI */
-    #reader { width: 100%; overflow: hidden; border-radius: 14px; background: #f7f9fc; position: relative;}
-    #reader video { border-radius: 12px; object-fit: cover; }
-    #reader__dashboard_section_csr button, #reader button { min-height: 40px; border-radius: 10px; background: var(--blue); color: white; border: 0; padding: 8px 12px; font-family: inherit; font-weight: 700; cursor: pointer; }
+    /* Camera UI (Core) */
+    #reader { width: 100%; overflow: hidden; border-radius: 14px; background: #000; position: relative; min-height: 250px;}
+    #reader video { border-radius: 12px; object-fit: cover; width: 100%; height: 100%; display: block;}
     
     .zoom-container { display: none; margin-top: 10px; padding: 12px; background: #f0f3f8; border-radius: 10px; align-items: center; gap: 10px; }
     .zoom-container label { font-weight: 600; font-size: 13px; white-space: nowrap; }
@@ -113,6 +112,7 @@
       </div>
 
       <div id="view-barcode" class="view-section active">
+        <!-- กล่องวิดีโอแบบใหม่ ไม่มีปุ่มของระบบกวนใจ -->
         <div id="reader"></div>
         <div class="zoom-container" id="zoom-container">
             <label for="zoom-slider">🔍 ซูม:</label>
@@ -137,11 +137,11 @@
   </main>
 
   <script>
-    let html5QrcodeScanner;
+    let html5QrCode;
     let cameraTrack = null; 
     let allTargets = [];
     let foundTargets = new Set();
-    let isPaused = false; // ตัวแปรบล็อกการสแกนซ้ำโดยไม่ต้องปิดกล้อง (แก้บั๊ก iPhone)
+    let isPaused = false; 
     let audioCtx;
 
     // ----- ระบบเสียงเตือน (Web Audio API) ดังสนั่น -----
@@ -155,12 +155,12 @@
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
       
-      oscillator.type = 'square'; // คลื่น Square จะให้เสียงที่แหลมและดังมาก
+      oscillator.type = 'square'; 
       oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); 
       oscillator.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.1); 
       
-      gainNode.gain.setValueAtTime(1, audioCtx.currentTime); // ความดังสูงสุด
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6); // ค่อยๆ เบาลงใน 0.6 วิ
+      gainNode.gain.setValueAtTime(1, audioCtx.currentTime); 
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6); 
       
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
@@ -199,11 +199,14 @@
     }
 
     document.getElementById('save-btn').addEventListener('click', () => {
-      initAudio(); // ขออนุญาตใช้เสียงจากมือถือ
+      initAudio(); // ขออนุญาตใช้เสียงจากระบบ
       loadTargets();
       try { localStorage.setItem('sn-target-list-pro', document.getElementById('target-sns').value); } catch(e){}
       document.getElementById('save-btn').textContent = 'บันทึกแล้ว ✓';
       setTimeout(() => document.getElementById('save-btn').textContent = 'บันทึก & เริ่มค้นหา', 1500);
+      
+      // ถ้ากล้องยังไม่ทำงาน ให้เรียกกล้องขึ้นมาเลย
+      if (!html5QrCode) { initBarcodeScanner(); }
     });
 
     document.getElementById('clear-btn').addEventListener('click', () => {
@@ -221,11 +224,10 @@
 
     // ----- ฟังก์ชันประมวลผลการสแกน -----
     function processResult(extractedText, source) {
-      if (isPaused && source === 'barcode') return; // บล็อกการประมวลผลถ้าเจอแล้ว (แต่ไม่หยุดกล้อง)
+      if (isPaused) return; // บล็อกการประมวลผลถ้าเจอแล้ว 
 
       let matchedTarget = null;
       for (let target of allTargets) {
-        // หาตัวที่สแกนเจอ และต้องเป็นตัวที่ยังไม่เคยเจอมาก่อน
         if (extractedText.includes(target) && !foundTargets.has(target)) {
           matchedTarget = target;
           break;
@@ -233,15 +235,13 @@
       }
 
       if (matchedTarget) {
-        // เจอเป้าหมายใหม่!
         foundTargets.add(matchedTarget);
         renderTrackingUI();
         
-        isPaused = true; // ล็อกไม่ให้สแกนตัวอื่นต่อจนกว่าจะกดรับทราบ
-        playLoudBeep();  // ส่งเสียงเตือนดังๆ
+        isPaused = true; // ล็อกไม่ให้สแกนตัวอื่นต่อ
+        playLoudBeep();  // ส่งเสียงเตือน
         if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
 
-        // โชว์หน้าจอแจ้งเตือน
         const resBox = document.getElementById('result-overlay');
         resBox.className = 'match';
         document.getElementById('result-title').textContent = `✅ เจอเป้าหมายใหม่: ${matchedTarget}`;
@@ -249,7 +249,6 @@
         resBox.style.display = 'block';
         
       } else if (source === 'ocr') {
-        // ถ้าเป็นการถ่ายรูป แล้วไม่เจอเป้าหมายใหม่ ให้แจ้งเตือนด้วย
         alert("ไม่พบเป้าหมายใหม่ในรูปภาพ หรือรูปอาจเบลอเกินไป ลองถ่ายใหม่อีกครั้งครับ");
       }
     }
@@ -296,31 +295,25 @@
         }
     });
 
-    // ----- ระบบ Barcode -----
+    // ----- ระบบ Barcode (Core API แก้บั๊ก iOS) -----
     function initBarcodeScanner() {
-      if (!window.Html5QrcodeScanner) return;
-      html5QrcodeScanner = new Html5QrcodeScanner(
-        'reader', 
-        { 
-            fps: 10, 
-            qrbox: { width: 200, height: 200 }, // ลดขนาดกรอบนิดหน่อยให้จับภาพง่ายขึ้น
-            rememberLastUsedCamera: true
-        }, 
-        false
-      );
+      if (!window.Html5Qrcode) return;
       
-      html5QrcodeScanner.render(
-        (decodedText) => processResult(decodedText, 'barcode'), 
-        (error) => {}
-      );
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: { width: 220, height: 220 } };
 
-      const observer = new MutationObserver((mutations) => {
-        if (document.querySelector('#reader video')) {
-            setTimeout(setupCameraZoom, 1000); 
-            observer.disconnect(); 
-        }
+      // ดึงเลนส์กล้องมาใช้งานโดยตรง ไม่ผ่าน UI อัตโนมัติ
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config,
+        (decodedText) => processResult(decodedText, 'barcode'),
+        (errorMessage) => { /* ปล่อยว่างเพื่อไม่ให้มีข้อความรบกวน */ }
+      ).then(() => {
+        // เมื่อกล้องเปิดสำเร็จ ให้ตั้งค่าการซูม
+        setTimeout(setupCameraZoom, 500); 
+      }).catch((err) => {
+        console.error("Camera start failed", err);
       });
-      observer.observe(document.getElementById('reader'), { childList: true, subtree: true });
     }
     
     window.addEventListener('load', initBarcodeScanner);
